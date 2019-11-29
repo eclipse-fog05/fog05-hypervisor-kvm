@@ -26,10 +26,10 @@ import libvirt
 import ipaddress
 import threading
 from mvar import MVar
-from fog05sdk import Yaks_Connector
-from fog05sdk.DLogger import DLogger
-from fog05sdk.interfaces.States import State
-from fog05sdk.interfaces.RuntimePluginFDU import *
+from fog05_sdk import Yaks_Connector
+from fog05_sdk.DLogger import DLogger
+from fog05_sdk.interfaces.States import State
+from fog05_sdk.interfaces.RuntimePluginFDU import *
 from KVMFDU import KVMFDU
 from jinja2 import Environment
 
