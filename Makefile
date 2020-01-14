@@ -8,7 +8,7 @@ FOS_CONF_FILE = /etc/fos/agent.json
 KVM_PLUGIN_DIR = /etc/fos/plugins/plugin-fdu-kvm
 LKVM_PLUGIN_CONFFILE = /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin.json
 all:
-	cd src/ocaml; make
+	echo "Nothing to do"
 
 install:
 	sudo pip3 install libvirt-python jinja2
