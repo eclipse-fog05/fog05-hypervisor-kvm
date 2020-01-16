@@ -1,7 +1,7 @@
 # -*-Makefile-*-
 
 WD := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))));
-
+UUID = $(shell ./to_uuid.sh)
 ETC_FOS_DIR = /etc/fos/
 VAR_FOS_DIR = /var/fos/
 FOS_CONF_FILE = /etc/fos/agent.json
