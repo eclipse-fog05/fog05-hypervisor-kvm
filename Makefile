@@ -13,7 +13,7 @@ all:
 install:
 	sudo pip3 install libvirt-python jinja2
 	sudo usermod -aG kvm fos
-	sudo usermod -aG libvirtd fos
+	sudo usermod -aG libvirt fos
 ifeq "$(wildcard $(KVM_PLUGIN_DIR))" ""
 	sudo cp -r ../plugin-fdu-kvm /etc/fos/plugins/
 else
