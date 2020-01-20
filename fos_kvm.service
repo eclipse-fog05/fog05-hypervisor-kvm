@@ -6,9 +6,12 @@ After=network.target
 [Service]
 Type=simple
 PIDFile=/var/fos/kvm.pid
-ExecStart = /etc/fos/plugins/KVM/KVM_plugin /etc/fos/plugins/KVM/KVM_plugin.json
+ExecStart = /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin.json
 KillMode=process
 Restart=on-failure
 User=fos
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=fos_kvm
 [Install]
 WantedBy=multi-user.target
