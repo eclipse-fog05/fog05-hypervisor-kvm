@@ -2,30 +2,36 @@
 
 WD := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))));
 UUID = $(shell ./to_uuid.sh)
-ETC_FOS_DIR = /etc/fos/
-VAR_FOS_DIR = /var/fos/
-FOS_CONF_FILE = /etc/fos/agent.json
 KVM_PLUGIN_DIR = /etc/fos/plugins/plugin-fdu-kvm
-LKVM_PLUGIN_CONFFILE = /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin.json
+KVM_PLUGIN_CONFFILE = $(KVM_PLUGIN_DIR)/KVM_plugin.json
+SYSTEMD_DIR = /lib/systemd/system/
+
 all:
 	echo "Nothing to do"
 
+clean:
+	echo "Nothing to do"
+
 install:
-	sudo pip3 install libvirt-python jinja2
-	sudo usermod -aG kvm fos
-	sudo usermod -aG libvirt fos
+
 ifeq "$(wildcard $(KVM_PLUGIN_DIR))" ""
-	sudo cp -r ../plugin-fdu-kvm /etc/fos/plugins/
+	mkdir -p $(KVM_PLUGIN_DIR)
+	sudo cp -r ./templates $(KVM_PLUGIN_DIR)
+	sudo cp ./__init__.py $(KVM_PLUGIN_DIR)
+	sudo cp ./KVM_plugin $(KVM_PLUGIN_DIR)
+	sudo cp ./KVMFDU.py $(KVM_PLUGIN_DIR)
+	sudo cp ./README.md $(KVM_PLUGIN_DIR)
+	sudo cp ./KVM_plugin.json $(KVM_PLUGIN_DIR)
 else
-	sudo cp -r ../plugin-fdu-kvm/templates /etc/fos/plugins/plugin-fdu-kvm/
-	sudo cp ../plugin-fdu-kvm/__init__.py /etc/fos/plugins/plugin-fdu-kvm/
-	sudo cp ../plugin-fdu-kvm/KVM_plugin /etc/fos/plugins/plugin-fdu-kvm/
-	sudo cp ../plugin-fdu-kvm/KVMFDU.py /etc/fos/plugins/plugin-fdu-kvm/
-	sudo cp ../plugin-fdu-kvm/README.md /etc/fos/plugins/plugin-fdu-kvm/
-	sudo cp /etc/fos/plugins/KVM/fos_kvm.service /lib/systemd/system/
+	sudo cp -r ./templates $(KVM_PLUGIN_DIR)
+	sudo cp ./__init__.py $(KVM_PLUGIN_DIR)
+	sudo cp ./KVM_plugin $(KVM_PLUGIN_DIR)
+	sudo cp ./KVMFDU.py $(KVM_PLUGIN_DIR)
+	sudo cp ./README.md $(KVM_PLUGIN_DIR)
+
 endif
-	sudo cp /etc/fos/plugins/plugin-fdu-kvm/fos_kvm.service /lib/systemd/system/
-	sudo sh -c "echo $(UUID) | xargs -i  jq  '.configuration.nodeid = \"{}\"' /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin.json > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp /etc/fos/plugins/plugin-fdu-kvm/KVM_plugin.json"
+	sudo cp ./fos_kvm.service $(SYSTEMD_DIR)
+	sudo sh -c "echo $(UUID) | xargs -i  jq  '.configuration.nodeid = \"{}\"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
 
 
 uninstall:
