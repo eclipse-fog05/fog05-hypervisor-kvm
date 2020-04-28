@@ -836,11 +836,15 @@ class KVM(RuntimePluginFDU):
             else:
 
                 log_filename = '{}/{}/{}_log.log'.format(self.BASE_DIR, self.LOG_DIR, instance_uuid)
+                cmd = 'sudo chmod a+r {}'.format(log_filename)
+                self.os.execute_command(cmd, blocking=True, external=True)
+
                 self.logger.info('get_log_fdu()', 'FDU log file {}'.format(log_filename))
 
                 out = open(log_filename)
                 data = out.read()
                 out.close()
+
 
                 return {'result': data}
 
