@@ -13,7 +13,8 @@ clean:
 	echo "Nothing to do"
 
 install:
-
+	sudo usermod -aG kvm fos
+	sudo usermod -aG libvirt fos
 ifeq "$(wildcard $(KVM_PLUGIN_DIR))" ""
 	mkdir -p $(KVM_PLUGIN_DIR)
 	sudo cp -r ./templates $(KVM_PLUGIN_DIR)
