@@ -25,6 +25,7 @@ import re
 import libvirt
 import ipaddress
 import threading
+import traceback
 from mvar import MVar
 from fog05_sdk import Yaks_Connector
 from fog05_sdk.DLogger import DLogger
@@ -32,6 +33,7 @@ from fog05_sdk.interfaces.States import State
 from fog05_sdk.interfaces.RuntimePluginFDU import *
 from KVMFDU import KVMFDU
 from jinja2 import Environment
+from functools import partial
 
 
 class KVM(RuntimePluginFDU):
@@ -393,11 +395,28 @@ class KVM(RuntimePluginFDU):
             self.logger.info('configure_fdu()', '[ DONE ] KVM Plugin - Configure a VM uuid {}'.format(instance_uuid))
 
             # TODO: monitoring TBA
-            # this monitoring uses pylxd to get container information
+            # this monitoring uses libvirt to get container information
             mt = threading.Thread(target=self.__monitor_instance, args=(fdu_uuid, instance_uuid, fdu.name),daemon=True)
             mt.start()
             self.mon_th.update({instance_uuid:mt})
-            self.logger.info('run_fdu()', '[ DONE ] LXD Plugin - Starting a Monitoring of {}'.format(instance_uuid))
+            self.logger.info('configure_fdu()', '[ DONE ] LXD Plugin - Starting a Monitoring of {}'.format(instance_uuid))
+
+            self.logger.info('configure_fdu()', '[ INFO ] KVM Plugin - Registreting start/run/log/ls/file evals for {}'.format(instance_uuid))
+            start_fun  = partial(self.start_fdu, instance_uuid)
+            run_fun  = partial(self.run_fdu, instance_uuid)
+            log_fun  = partial(self.get_log_fdu, instance_uuid)
+            ls_fun  = partial(self.get_ls_fdu, instance_uuid)
+            file_fun  = partial(self.get_file_fdu, instance_uuid)
+
+            try:
+                self.connector.loc.actual.add_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid, start_fun)
+                self.connector.loc.actual.add_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid, run_fun)
+                self.connector.loc.actual.add_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid, log_fun)
+                self.connector.loc.actual.add_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid, ls_fun)
+                self.connector.loc.actual.add_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid, file_fun)
+            except Exception as e:
+                self.logger.error('configure_fdu()', '[ ERRO ] KVM Plugin - Error in registering start/run/log/ls/file function: {}'.format(e))
+                traceback.print_exc()
 
 
     def clean_fdu(self, instance_uuid):
@@ -445,43 +464,60 @@ class KVM(RuntimePluginFDU):
             fdu.on_clean()
             self.current_fdus.update({instance_uuid: fdu})
             self.update_fdu_status(fdu_uuid, instance_uuid, 'DEFINE')
+
+            self.logger.info('clean_fdu()', '[ INFO ] KVM Plugin - Unregistering start/run/log/ls/file evals for {}'.format(instance_uuid))
+            self.connector.loc.actual.remove_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+
             self.logger.info('clean_fdu()', '[ DONE ] KVM Plugin - Clean a VM uuid {} '.format(instance_uuid))
 
 
-    def run_fdu(self, instance_uuid):
+    def start_fdu(self, instance_uuid, env):
 
-        self.logger.info('run_fdu()', 'KVM Plugin - Starting a VM uuid {}'.format(instance_uuid))
-        fdu = self.current_fdus.get(instance_uuid, None)
-        if fdu is None:
-            self.logger.error('run_fdu()', 'KVM Plugin - FDU not exists')
-            raise FDUNotExistingException('FDU not existing', 'FDU {} not in runtime {}'.format(instance_uuid, self.uuid))
-        elif fdu.get_status() != State.CONFIGURED:
-            self.logger.error('run_fdu()', 'KVM Plugin - FDU state is wrong, or transition not allowed')
-            raise StateTransitionNotAllowedException('FDU is not in CONFIGURED state', 'FDU {} is not in CONFIGURED state'.format(instance_uuid))
-        else:
-            fdu_uuid = fdu.get_fdu_id()
-            self.current_fdus.update({instance_uuid: fdu})
-            self.update_fdu_status(fdu_uuid, instance_uuid, 'STARTING')
-            self.logger.info('run_fdu()', '[ INFO ] KVM Plugin - VM Name {}'.format(fdu.name))
+        self.logger.info('start_fdu()', 'KVM Plugin - Starting a VM uuid {}'.format(instance_uuid))
+        try:
+            fdu = self.current_fdus.get(instance_uuid, None)
+            if fdu is None:
+                self.logger.error('start_fdu()', 'KVM Plugin - FDU not exists')
+                return {'error': 'FDU not exists'}
+            elif fdu.get_status() != State.CONFIGURED:
+                self.logger.error('start_fdu()', 'KVM Plugin - FDU state is wrong, or transition not allowed')
+                return {'error': 'FDU is not in CONFIGURED state'}
+            else:
+                fdu_uuid = fdu.get_fdu_id()
+                self.current_fdus.update({instance_uuid: fdu})
+                self.update_fdu_status(fdu_uuid, instance_uuid, 'STARTING')
+                self.logger.info('start_fdu()', '[ INFO ] KVM Plugin - VM Name {}'.format(fdu.name))
 
-            dom = self.__lookup_by_uuid(instance_uuid)
-            dom.create()
-            while dom.state()[0] != 1:
-               pass
-            self.logger.info('run_fdu()', ' KVM Plugin - VM {} Started!'.format(instance_uuid))
+                dom = self.__lookup_by_uuid(instance_uuid)
+                dom.create()
+                while dom.state()[0] != 1:
+                    pass
+                self.logger.info('start_fdu()', ' KVM Plugin - VM {} Started!'.format(instance_uuid))
 
-            fdu.on_start()
-            # log_filename = '{}/{}/{}_log.log'.format(self.BASE_DIR, self.LOG_DIR, instance_uuid)
-            # if instance.user_file is not None and instance.user_file != '':
-            #     self.__wait_boot(log_filename, True)
-            # else:
-            #     self.__wait_boot(log_filename)
+                fdu.on_start()
+                # log_filename = '{}/{}/{}_log.log'.format(self.BASE_DIR, self.LOG_DIR, instance_uuid)
+                # if instance.user_file is not None and instance.user_file != '':
+                #     self.__wait_boot(log_filename, True)
+                # else:
+                #     self.__wait_boot(log_filename)
 
-            self.current_fdus.update({instance_uuid: fdu})
-            self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
+                self.current_fdus.update({instance_uuid: fdu})
+                self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
 
-            self.logger.info('run_fdu()', '[ DONE ] KVM Plugin - Starting a VM uuid {}'.format(instance_uuid))
+                self.logger.info('start_fdu()', '[ DONE ] KVM Plugin - Starting a VM uuid {}'.format(instance_uuid))
 
+                return {'result': instance_uuid}
+        except Exception as e:
+            self.logger.error('start_fdu()', '[ ERRO ] KVM Plugin - Error: {}'.format(e))
+            traceback.print_exc()
+            return {'error':'{}'.format(e)}
+
+    def run_fdu(self, instance_uuid, ignored):
+        return {'error':'KVM FDU {} cannot be run, use start instead'.format(instance_uuid)}
 
     def stop_fdu(self, instance_uuid):
 
@@ -569,7 +605,7 @@ class KVM(RuntimePluginFDU):
 
             self.logger.info('migrate_fdu()', '[ DONE ] KVM Plugin - Migrating...')
 
-            # ACTUAL MIGRATIION #
+            # ACTUAL MIGRATION #
             dom = self.__lookup_by_uuid(instance_uuid)
             dst_ip = self.agent.get_node_mgmt_address(destination).get('ipv4_address')
             dst_host = 'qemu+ssh://{}/system'.format(dst_ip)
@@ -607,6 +643,7 @@ class KVM(RuntimePluginFDU):
 
 
         else:
+            self.logger.info('migrate_fdu()', '[ DONE ] KVM Plugin - Destination Node preparation...')
             record.set_status('DEFINE')
             self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid, record)
 
@@ -772,23 +809,51 @@ class KVM(RuntimePluginFDU):
 
             fdu.on_start()
             self.current_fdus.update({instance_uuid: fdu})
-            record.pop('migration_properties')
-            record.update({'status': 'RUN'})
-            self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid, record)
+            record.set_migration_properties('','')
+            record.on_start()
+            self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid, record.to_json)
             self.logger.info('migrate_fdu()', '[ DONE ] KVM Plugin - Migrate a VM uuid {}'.format(instance_uuid))
 
-                #
-                # Here we shoudl copy the disk image somehow
-                #
+            #
+            # Here we should copy the disk image somehow
+            #
 
 
 
 
-    def before_migrate_fdu_actions(self, fdu_uuid, dst=False):
-        pass
+    def get_log_fdu(self, instance_uuid, unit):
+        try:
+            self.logger.info('get_log_fdu()', ' KVM Plugin - Running VM uuid {}'.format(instance_uuid))
 
-    def after_migrate_fdu_actions(self, fdu_uuid, dst=False):
-        pass
+
+            fdu = self.current_fdus.get(instance_uuid, None)
+            if fdu is None:
+                self.logger.error('get_log_fdu()', 'KVM Plugin - FDU not exists')
+                return {'error': 'FDU not exists'}
+            elif fdu.get_status() != State.CONFIGURED and fdu.get_status() != State.RUNNING:
+                self.logger.error('get_log_fdu()', 'KVM Plugin - FDU state is wrong, or transition not allowed')
+                return {'error': 'FDU is not in correct state'}
+            else:
+
+                log_filename = '{}/{}/{}_log.log'.format(self.BASE_DIR, self.LOG_DIR, instance_uuid)
+                self.logger.info('get_log_fdu()', 'FDU log file {}'.format(log_filename))
+
+                out = open(log_filename)
+                data = out.read()
+                out.close()
+
+                return {'result': data}
+
+        except Exception as e:
+            self.logger.error('get_log_fdu()', '[ ERRO ] KVM Plugin - Error: {}'.format(e))
+            traceback.print_exc()
+            return {'error':'{}'.format(e)}
+
+    def get_ls_fdu(self, instance_uuid, unit):
+        return {'error':'KVM FDU {} cannot get ls'.format(instance_uuid)}
+
+    def get_file_fdu(self, instance_uuid, filename):
+        return {'error':'KVM FDU {} cannot get file'.format(instance_uuid)}
 
     def __monitor_instance(self, fdu_uuid, instance_id, instance_name):
         self.logger.info('__monitor_fdu()','[ INFO ] KVM Plugin - Staring monitoring of VM uuid {}'.format(instance_id))
@@ -982,12 +1047,24 @@ class KVM(RuntimePluginFDU):
             else:
                 self.logger.info('__fdu_observer()', ' KVM Plugin - Action not recognized : {}'.format(action))
         except FDUNotExistingException as nex:
+            self.logger.info('__fdu_observer()', ' Error: {}'.format(nex))
+            traceback.print_exc()
             self.write_fdu_error(fdu_info.get('fdu_uuid'), fdu_uuid, 9, nex)
             time.sleep(10)
             self.connector.loc.actual.remove_node_fdu(self.node, self.uuid, fdu_info.get('fdu_uuid'), fdu_uuid)
             return
         except StateTransitionNotAllowedException as stna:
+            self.logger.info('__fdu_observer()', ' Error: {}'.format(stna))
+            traceback.print_exc()
             self.write_fdu_error(fdu_info.get('fdu_uuid'), fdu_uuid, 10, stna)
+            time.sleep(5)
+            fdu = self.current_fdus.get(fdu_uuid)
+            self.update_fdu_status(fdu_info.get('fdu_uuid'), fdu_uuid,fdu.status)
+            return
+        except Exception as e:
+            self.logger.info('__fdu_observer()', ' Error: {}'.format(e))
+            traceback.print_exc()
+            self.write_fdu_error(fdu_info.get('fdu_uuid'), fdu_uuid, 10, e)
             time.sleep(5)
             fdu = self.current_fdus.get(fdu_uuid)
             self.update_fdu_status(fdu_info.get('fdu_uuid'), fdu_uuid,fdu.status)
@@ -999,7 +1076,6 @@ class KVM(RuntimePluginFDU):
             'CONFIGURE': self.configure_fdu,
             'STOP': self.stop_fdu,
             'RESUME': self.resume_fdu,
-            'RUN': self.run_fdu,
             'CLEAN': self.clean_fdu,
             'LAND': self.migrate_fdu,
             'TAKE_OFF': self.migrate_fdu
