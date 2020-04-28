@@ -1,4 +1,4 @@
-<!-- # Copyright (c) 2014,2018 ADLINK Technology Inc.
+<!-- # Copyright (c) 2014,2020 ADLINK Technology Inc.
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -28,9 +28,9 @@ supported operation:
 - stop
 - pause
 - resume
+- migrate
 
 todo:
-- migrate
 - scale of vm
 
 ---
