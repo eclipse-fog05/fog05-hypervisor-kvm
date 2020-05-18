@@ -47,9 +47,17 @@ class KVM(RuntimePluginFDU):
 
         self.agent_conf = \
             self.connector.loc.actual.get_node_configuration(self.node)
+        self.configuration = manifest.get('configuration')
 
         self.logger.info('__init__()', ' Hello from KVM Plugin')
-        self.update_interval =  manifest.get('configuration').get('update_interval', 10)
+        self.update_interval =   self.configuration.get('update_interval', 10)
+
+        if self.configuration.get('emulator') is None:
+            raise ValueError("emulator field in configuration cannot be none, set a qemu binary eg. /usr/bin/qemu-system-x86_64")
+        if self.configuration.get('machine') is None:
+            raise ValueError("machine field in configuration cannot be none, set a qemu machine eg. pc-i440fx-2.5")
+        if self.configuration.get('arch') is None:
+             raise ValueError("arch field in configuration cannot be none, set a cpu architecture eg. x86_64")
 
         self.BASE_DIR = os.path.join(self.agent_conf.get('agent').get('path'),'kvm')
         self.DISK_DIR = 'disks'
@@ -60,6 +68,7 @@ class KVM(RuntimePluginFDU):
         file_dir = os.path.dirname(__file__)
         self.DIR = os.path.abspath(file_dir)
         self.conn = None
+
         self.images = {}
         self.flavors = {}
         self.mon_th = {}
@@ -390,9 +399,7 @@ class KVM(RuntimePluginFDU):
 
             record = InfraFDU(record)
             record.set_status('CONFIGURE')
-            self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid,instance_uuid, record.to_json())
-            #self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid,instance_uuid, fdu.to_json())
-            self.logger.info('configure_fdu()', '[ DONE ] KVM Plugin - Configure a VM uuid {}'.format(instance_uuid))
+
 
             # TODO: monitoring TBA
             # this monitoring uses libvirt to get container information
@@ -417,6 +424,9 @@ class KVM(RuntimePluginFDU):
             except Exception as e:
                 self.logger.error('configure_fdu()', '[ ERRO ] KVM Plugin - Error in registering start/run/log/ls/file function: {}'.format(e))
                 traceback.print_exc()
+
+            self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid,instance_uuid, record.to_json())
+            self.logger.info('configure_fdu()', '[ DONE ] KVM Plugin - Configure a VM uuid {}'.format(instance_uuid))
 
 
     def clean_fdu(self, instance_uuid):
@@ -635,6 +645,15 @@ class KVM(RuntimePluginFDU):
             dest_conn.close()
             #
             fdu.on_stop()
+
+            self.logger.info('migrate_fdu()', '[ INFO ] KVM Plugin - Unregistering start/run/log/ls/file evals for {}'.format(instance_uuid))
+            self.connector.loc.actual.remove_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+
+
             self.current_fdus.update({instance_uuid: fdu})
             self.clean_fdu(instance_uuid)
             self.undefine_fdu(instance_uuid)
@@ -811,6 +830,25 @@ class KVM(RuntimePluginFDU):
             self.current_fdus.update({instance_uuid: fdu})
             record.set_migration_properties('','')
             record.on_start()
+
+            self.logger.info('migrate_fdu()', '[ INFO ] KVM Plugin - Registreting start/run/log/ls/file evals for {}'.format(instance_uuid))
+            start_fun  = partial(self.start_fdu, instance_uuid)
+            run_fun  = partial(self.run_fdu, instance_uuid)
+            log_fun  = partial(self.get_log_fdu, instance_uuid)
+            ls_fun  = partial(self.get_ls_fdu, instance_uuid)
+            file_fun  = partial(self.get_file_fdu, instance_uuid)
+
+            try:
+                self.connector.loc.actual.add_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid, start_fun)
+                self.connector.loc.actual.add_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid, run_fun)
+                self.connector.loc.actual.add_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid, log_fun)
+                self.connector.loc.actual.add_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid, ls_fun)
+                self.connector.loc.actual.add_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid, file_fun)
+            except Exception as e:
+                self.logger.error('migrate_fdu()', '[ ERRO ] KVM Plugin - Error in registering start/run/log/ls/file function: {}'.format(e))
+                traceback.print_exc()
+
+
             self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid, record.to_json)
             self.logger.info('migrate_fdu()', '[ DONE ] KVM Plugin - Migrate a VM uuid {}'.format(instance_uuid))
 
@@ -1010,9 +1048,16 @@ class KVM(RuntimePluginFDU):
     def __generate_dom_xml(self, fdu, flavor, image, net_cfg):
         template_xml = self.os.read_file(os.path.join(self.DIR, 'templates', 'vm.xml'))
         vm_xml = Environment().from_string(template_xml)
-        vm_xml = vm_xml.render(name=fdu.name, uuid=fdu.uuid, memory=int(flavor.get('memory')),
-                               cpu=flavor.get('cpu'), disk_image=fdu.disk,
-                               iso_image=fdu.cdrom, networks=net_cfg, format=image.get('format'))
+        vm_xml = vm_xml.render(emulator=self.configuration.get('emulator'),
+                                machine=self.configuration.get('machine'),
+                                arch=self.configuration.get('arch'),
+                                name=fdu.name, uuid=fdu.uuid,
+                                memory=int(flavor.get('memory')),
+                                cpu=flavor.get('cpu'),
+                                disk_image=fdu.disk,
+                                iso_image=fdu.cdrom,
+                                networks=net_cfg,
+                                format=image.get('format'))
         return vm_xml
 
     def __generate_vendor_data(self, entityid, nodeid):

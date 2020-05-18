@@ -17,40 +17,68 @@
 
 <domain type="kvm">
     <name>{{ name }}</name>
-    <!-- <cpu>
-        <topology cores="4" sockets="1" threads="4" />
-    </cpu> -->
     <uuid>{{ uuid }}</uuid>
     <memory unit="MB">{{ memory }}</memory>
     <currentMemory unit="MB">{{ memory }}</currentMemory>
     <vcpu placement="static">{{ cpu }}</vcpu>
+    <cputune>
+        <shares>1024</shares>
+    </cputune>
+    <!-- <resource>
+        <partition>/machine</partition>
+    </resource> -->
+    <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>Eclipse Foundation</entry>
+      <entry name='product'>Eclipse fog05</entry>
+      <entry name='version'>0.2</entry>
+      <entry name='serial'>{{ uuid }}</entry>
+      <entry name='uuid'>{{ uuid }}</entry>
+      <entry name='family'>KVM Virtual Machine</entry>
+    </system>
+    </sysinfo>
+     <cpu mode='custom' match='exact' check='full'>
+        <topology sockets='1' dies='1' cores='{{ cpu }}' threads='1'/>
+        <model fallback='forbid'>kvm64</model>
+        <vendor>Intel</vendor>
+        <feature policy='require' name='vmx'/>
+        <feature policy='require' name='x2apic'/>
+        <feature policy='require' name='tsc-deadline'/>
+        <feature policy='require' name='hypervisor'/>
+        <feature policy='require' name='arat'/>
+        <feature policy='require' name='tsc_adjust'/>
+        <feature policy='require' name='lahf_lm'/>
+        <feature policy='disable' name='skip-l1dfl-vmentry'/>
+        <feature policy='disable' name='vme'/>
+    </cpu>
     <os>
-        <type machine='pc-i440fx-2.5'>hvm</type>
+        <type arch="{{ arch }}" machine='{{ machine }}'>hvm</type>
         <boot dev="hd"/>
+         <smbios mode='sysinfo'/>
     </os>
     <features>
         <acpi/>
         <apic/>
-        <pae/>
     </features>
     <clock offset="utc"/>
     <on_poweroff>destroy</on_poweroff>
     <on_reboot>restart</on_reboot>
     <on_crash>restart</on_crash>
     <devices>
-        <emulator>/usr/bin/kvm-spice</emulator>
+        <emulator>{{ emulator }}</emulator>
         <disk device="disk" type="file">
-            <driver name="qemu" type="{{ format }}"/>
+            <driver name="qemu" type="{{ format }}" cache='none'/>
             <source file="{{ disk_image }}"/>
-            <target dev="hda"/>
-            <address bus="0" controller="0" target="0" type="drive" unit="0"/>
+            <target dev="vda" bus='virtio'/>
+            <alias name='virtio-disk0'/>
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
         </disk>
 
         {% if iso_image is defined %}
         <disk device="cdrom" type="file">
             <source file="{{ iso_image }}"/>
             <driver name="qemu" type="raw"/>
-            <target bus="ide" dev="hdc"/>
+            <target bus="sata" dev="sdc"/>
             <readyonly/>
             <address bus="1" controller="0" target="0" type="drive" unit="0"/>
         </disk>
@@ -61,7 +89,7 @@
         <disk device="disk" type="file">
             <driver name="qemu" type="qcow2"/>
             <source file="{{ disk.path }}"/>
-            <target dev="hd{{loop.index}}"/>
+            <target dev="sd{{loop.index}}"/>
         </disk>
         {% endfor %}
 
@@ -86,33 +114,26 @@
          {% endif %}
         {% endfor %}
         {% endif %}
-        <serial type='file'>
-            <source path='/var/fos/kvm/logs/{{ uuid }}_log.log'/>
-            <target port='0'/>
-        </serial>
-        <console type='file'>
-            <source path='/var/fos/kvm/logs/{{ uuid }}_log.log'/>
-            <target type='serial' port='0'/>
-        </console>
 
-        <!--<serial type='pty'>
-            <source path='/dev/pts/20'/>
-            <target port='0'/>
-            <alias name='serial0'/>
-        </serial>
-        <serial type='file'>
-            <source path='/opt/fos/{{ name }}_log'/>
-            <target port='1'/>
-        </serial>
-        <console type='pty' tty='/dev/pts/20'>
-            <source path='/dev/pts/20'/>
-            <target type='serial' port='0'/>
-            <alias name='serial0'/>
-        </console>
-        <console type='file'>
-            <source path='/opt/fos/{{ name }}_log'/>
-            <target type='serial' port='1'/>
-        </console> -->
-        <graphics port="-1" type="vnc"/>
+        <serial type='pty'>
+      <source path='/dev/pts/1'/>
+      <log file='/var/fos/kvm/logs/{{ uuid }}_log.log' append='off'/>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+      <alias name='serial0'/>
+    </serial>
+    <console type='pty' tty='/dev/pts/1'>
+      <source path='/dev/pts/1'/>
+      <log file='/var/fos/kvm/logs/{{ uuid }}_log.log' append='off'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+
+
+
+    <graphics type='vnc' port='5900' autoport='yes' listen='0.0.0.0'>
+      <listen type='address' address='0.0.0.0'/>
+    </graphics>
     </devices>
 </domain>
