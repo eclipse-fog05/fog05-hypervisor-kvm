@@ -47,9 +47,17 @@ class KVM(RuntimePluginFDU):
 
         self.agent_conf = \
             self.connector.loc.actual.get_node_configuration(self.node)
+        self.configuration = manifest.get('configuration')
 
         self.logger.info('__init__()', ' Hello from KVM Plugin')
-        self.update_interval =  manifest.get('configuration').get('update_interval', 10)
+        self.update_interval =   self.configuration.get('update_interval', 10)
+
+        if self.configuration.get('emulator') is None:
+            raise ValueError("emulator field in configuration cannot be none, set a qemu binary eg. /usr/bin/qemu-system-x86_64")
+        if self.configuration.get('machine') is None:
+            raise ValueError("machine field in configuration cannot be none, set a qemu machine eg. pc-i440fx-2.5")
+        if self.configuration.get('arch') is None:
+             raise ValueError("arch field in configuration cannot be none, set a cpu architecture eg. x86_64")
 
         self.BASE_DIR = os.path.join(self.agent_conf.get('agent').get('path'),'kvm')
         self.DISK_DIR = 'disks'
@@ -60,6 +68,7 @@ class KVM(RuntimePluginFDU):
         file_dir = os.path.dirname(__file__)
         self.DIR = os.path.abspath(file_dir)
         self.conn = None
+
         self.images = {}
         self.flavors = {}
         self.mon_th = {}
@@ -1039,9 +1048,16 @@ class KVM(RuntimePluginFDU):
     def __generate_dom_xml(self, fdu, flavor, image, net_cfg):
         template_xml = self.os.read_file(os.path.join(self.DIR, 'templates', 'vm.xml'))
         vm_xml = Environment().from_string(template_xml)
-        vm_xml = vm_xml.render(name=fdu.name, uuid=fdu.uuid, memory=int(flavor.get('memory')),
-                               cpu=flavor.get('cpu'), disk_image=fdu.disk,
-                               iso_image=fdu.cdrom, networks=net_cfg, format=image.get('format'))
+        vm_xml = vm_xml.render(emulator=self.configuration.get('emulator'),
+                                machine=self.configuration.get('machine'),
+                                arch=self.configuration.get('arch'),
+                                name=fdu.name, uuid=fdu.uuid,
+                                memory=int(flavor.get('memory')),
+                                cpu=flavor.get('cpu'),
+                                disk_image=fdu.disk,
+                                iso_image=fdu.cdrom,
+                                networks=net_cfg,
+                                format=image.get('format'))
         return vm_xml
 
     def __generate_vendor_data(self, entityid, nodeid):

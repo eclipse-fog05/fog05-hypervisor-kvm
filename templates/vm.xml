@@ -17,7 +17,28 @@
 
 <domain type="kvm">
     <name>{{ name }}</name>
-    <cpu mode='custom' match='exact' check='full'>
+    <uuid>{{ uuid }}</uuid>
+    <memory unit="MB">{{ memory }}</memory>
+    <currentMemory unit="MB">{{ memory }}</currentMemory>
+    <vcpu placement="static">{{ cpu }}</vcpu>
+    <cputune>
+        <shares>1024</shares>
+    </cputune>
+    <!-- <resource>
+        <partition>/machine</partition>
+    </resource> -->
+    <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>Eclipse Foundation</entry>
+      <entry name='product'>Eclipse fog05</entry>
+      <entry name='version'>0.2</entry>
+      <entry name='serial'>{{ uuid }}</entry>
+      <entry name='uuid'>{{ uuid }}</entry>
+      <entry name='family'>KVM Virtual Machine</entry>
+    </system>
+    </sysinfo>
+     <cpu mode='custom' match='exact' check='full'>
+        <topology sockets='1' dies='1' cores='{{ cpu }}' threads='1'/>
         <model fallback='forbid'>kvm64</model>
         <vendor>Intel</vendor>
         <feature policy='require' name='vmx'/>
@@ -30,28 +51,8 @@
         <feature policy='disable' name='skip-l1dfl-vmentry'/>
         <feature policy='disable' name='vme'/>
     </cpu>
-    <uuid>{{ uuid }}</uuid>
-    <memory unit="MB">{{ memory }}</memory>
-    <currentMemory unit="MB">{{ memory }}</currentMemory>
-    <vcpu placement="static">{{ cpu }}</vcpu>
-    <cputune>
-        <shares>1024</shares>
-    </cputune>
-    <resource>
-        <partition>/machine</partition>
-    </resource>
-    <sysinfo type='smbios'>
-    <system>
-      <entry name='manufacturer'>Eclipse Foundation</entry>
-      <entry name='product'>Eclipse fog05</entry>
-      <entry name='version'>0.2</entry>
-      <entry name='serial'>{{ uuid }}</entry>
-      <entry name='uuid'>{{ uuid }}</entry>
-      <entry name='family'>KVM Virtual Machine</entry>
-    </system>
-    </sysinfo>
     <os>
-        <type machine='pc-i440fx-2.5'>hvm</type>
+        <type arch="{{ arch }}" machine='{{ machine }}'>hvm</type>
         <boot dev="hd"/>
          <smbios mode='sysinfo'/>
     </os>
@@ -64,9 +65,9 @@
     <on_reboot>restart</on_reboot>
     <on_crash>restart</on_crash>
     <devices>
-        <emulator>/usr/bin/kvm-spice</emulator>
+        <emulator>{{ emulator }}</emulator>
         <disk device="disk" type="file">
-            <driver name="qemu" type="{{ format }}"/>
+            <driver name="qemu" type="{{ format }}" cache='none'/>
             <source file="{{ disk_image }}"/>
             <target dev="vda" bus='virtio'/>
             <alias name='virtio-disk0'/>
@@ -77,7 +78,7 @@
         <disk device="cdrom" type="file">
             <source file="{{ iso_image }}"/>
             <driver name="qemu" type="raw"/>
-            <target bus="ide" dev="hdc"/>
+            <target bus="sata" dev="sdc"/>
             <readyonly/>
             <address bus="1" controller="0" target="0" type="drive" unit="0"/>
         </disk>
