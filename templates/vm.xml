@@ -89,7 +89,7 @@
         <disk device="disk" type="file">
             <driver name="qemu" type="qcow2"/>
             <source file="{{ disk.path }}"/>
-            <target dev="hd{{loop.index}}"/>
+            <target dev="sd{{loop.index}}"/>
         </disk>
         {% endfor %}
 
