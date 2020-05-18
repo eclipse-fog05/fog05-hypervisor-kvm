@@ -32,8 +32,8 @@ else
 
 endif
 	sudo cp ./fos_kvm.service $(SYSTEMD_DIR).
-	sudo sh -c "uname -r | xargs -i jq '.configuration.arch = \"{}"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
-	sudo sh -c "uname -r | xargs -i jq '.configuration.emulator = \"/usr/bin/qemu-system-{}"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
+	sudo sh -c "uname -r | xargs -i jq '.configuration.arch = \"{}\"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
+	sudo sh -c "uname -r | xargs -i jq '.configuration.emulator = \"/usr/bin/qemu-system-{}\"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
 	sudo sh -c "echo $(UUID) | xargs -i  jq  '.configuration.nodeid = \"{}\"' $(KVM_PLUGIN_CONFFILE) > /tmp/kvm_plugin.tmp && mv /tmp/kvm_plugin.tmp $(KVM_PLUGIN_CONFFILE)"
 
 
